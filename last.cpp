@@ -5,16 +5,18 @@
 #include "std_msgs/Int64.h"
 #include "std_msgs/Float64MultiArray.h"
 
-#define ARRAY_LEN 4
+#define ARRAY_LEN 1
 
 std_msgs::Int64 rpm_data;
-int inc_char;
+
 static String rpmString;
 
 std_msgs::Float64MultiArray rpm_marray;
 
 int unmapped_rpm_command_array[ARRAY_LEN];
 int mapped_rpm_command_array[ARRAY_LEN];
+
+int inc_char;
 
 ros::NodeHandle nh;
 ros::Publisher rpm_pub("rpm_topic",&rpm_data);
@@ -41,29 +43,31 @@ void setup() {
   rpm_marray.data=(float *)malloc(sizeof(float)*ARRAY_LEN);
   rpm_marray.data_length=ARRAY_LEN;
 
+  
   while(!mySerial3) {;}
 
   motor1.setSerialPort(&mySerial3);
   nh.initNode();
   nh.advertise(rpm_pub);
+  
 }
 
 void loop() {
   readNdrive();
-  
-  delay(50);
 }
 
 void printRpm(void){
   if(motor1.getVescValues()){
     mySerial2.print("RPM 1:");
     mySerial2.println(motor1.data.rpm);
+    /*
     mySerial2.print("RPM 2:");
     mySerial2.println(motor2.data.rpm);
     mySerial2.print("RPM 3:");
     mySerial2.println(motor3.data.rpm);
     mySerial2.print("RPM 4:");
     mySerial2.println(motor4.data.rpm);
+    */
   }
   else{
     mySerial2.println("Failed to get the RPM data.");
@@ -73,9 +77,9 @@ void printRpm(void){
 void publishRpm(void){
   nh.spinOnce();
   rpm_marray.data[0]=motor1.data.rpm;
-  rpm_marray.data[1]=motor2.data.rpm;
-  rpm_marray.data[2]=motor3.data.rpm;
-  rpm_marray.data[3]=motor4.data.rpm;
+  //rpm_marray.data[1]=motor2.data.rpm;
+  //rpm_marray.data[2]=motor3.data.rpm;
+  //rpm_marray.data[3]=motor4.data.rpm;
 
   if(motor1.getVescValues() && motor2.getVescValues() && motor3.getVescValues() && motor4.getVescValues()){
     rpm_data.data=motor1.data.rpm;
@@ -87,26 +91,27 @@ void publishRpm(void){
 }
 
 void readNdrive(void){
+
+
   static bool receive_flag=false;
-  static int receive_counter=0;
   inc_char=mySerial2.read();
   delay(1);
+  if(mySerial2.available()>0){
   if(inc_char=='S'){
     rpmString="";
     receive_flag=true;
-    receive_counter++;
   }
-  if(receive_flag && inc_char!='S' && inc_char!='B'){
+  if(receive_flag && inc_char!='S' && inc_char!='F'){
     rpmString+=(char)inc_char;
-    receive_counter++;
   }
   if(inc_char=='F'){
     assignRpmArray(rpmString);
     mapData();
+
     drive();
     receive_flag=false;
-    receive_counter=0;
     rpmString="";
+  }
   }
 }
 
@@ -141,9 +146,10 @@ void assignRpmArray(String rpmStr){
   }
 }
 
+
 void drive(void){
   motor1.setRPM(mapped_rpm_command_array[0]);
-  motor2.setRPM(mapped_rpm_command_array[1]);
-  motor3.setRPM(mapped_rpm_command_array[2]);
-  motor4.setRPM(mapped_rpm_command_array[3]);
+  //motor2.setRPM(mapped_rpm_command_array[1]);
+  //motor3.setRPM(mapped_rpm_command_array[2]);
+  //motor4.setRPM(mapped_rpm_command_array[3]);
 }
