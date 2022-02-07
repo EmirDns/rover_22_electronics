@@ -3,12 +3,15 @@
 #include "VescUart.h"
 #include "ros.h"
 #include "std_msgs/Int64.h"
+#include "std_msgs/Float64MultiArray.h"
 
 #define ARRAY_LEN 4
 
 std_msgs::Int64 rpm_data;
 int inc_char;
 static String rpmString;
+
+std_msgs::Float64MultiArray rpm_marray;
 
 int unmapped_rpm_command_array[ARRAY_LEN];
 int mapped_rpm_command_array[ARRAY_LEN];
@@ -35,6 +38,9 @@ void setup() {
   mySerial3.begin(115200);
   mySerial2.begin(9600);
 
+  rpm_marray.data=(float *)malloc(sizeof(float)*ARRAY_LEN);
+  rpm_marray.data_length=ARRAY_LEN;
+
   while(!mySerial3) {;}
 
   motor1.setSerialPort(&mySerial3);
@@ -43,15 +49,21 @@ void setup() {
 }
 
 void loop() {
-  
+  readNdrive();
   
   delay(50);
 }
 
 void printRpm(void){
   if(motor1.getVescValues()){
-    mySerial2.print("RPM:");
+    mySerial2.print("RPM 1:");
     mySerial2.println(motor1.data.rpm);
+    mySerial2.print("RPM 2:");
+    mySerial2.println(motor2.data.rpm);
+    mySerial2.print("RPM 3:");
+    mySerial2.println(motor3.data.rpm);
+    mySerial2.print("RPM 4:");
+    mySerial2.println(motor4.data.rpm);
   }
   else{
     mySerial2.println("Failed to get the RPM data.");
@@ -60,7 +72,12 @@ void printRpm(void){
 
 void publishRpm(void){
   nh.spinOnce();
-  if(motor1.getVescValues()){
+  rpm_marray.data[0]=motor1.data.rpm;
+  rpm_marray.data[1]=motor2.data.rpm;
+  rpm_marray.data[2]=motor3.data.rpm;
+  rpm_marray.data[3]=motor4.data.rpm;
+
+  if(motor1.getVescValues() && motor2.getVescValues() && motor3.getVescValues() && motor4.getVescValues()){
     rpm_data.data=motor1.data.rpm;
     rpm_pub.publish(&rpm_data);
   }
