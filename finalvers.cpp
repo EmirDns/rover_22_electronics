@@ -15,10 +15,19 @@ std_msgs::Float64 rpm_data;
 ros::NodeHandle nh;
 ros::Publisher rpmPub("rpm_rover_topic", &rpm_data);
 
-HardwareSerial mySerial(PB11, PB10);
-HardwareSerial pcSerial(PC5, PC4);
+HardwareSerial RBSerial(PA3, PA2);
+HardwareSerial RFSerial(PB11, PB10);
+HardwareSerial LBSerial(PC11, PA10);
+HardwareSerial LFSerial(PD2, PC12);
 
-VescUart motor1;
+
+HardwareSerial motherBoardSerial(PA10, PA9);
+
+
+VescUart RBmotor;
+VescUart RFmotor;
+VescUart LBmotor;
+VescUart LFmotor;
 
 void readNdrive(void);
 void assignRpmArray(String rpmStr);
@@ -26,23 +35,40 @@ void mapData(void);
 void drive(void);
 
 void setup() {
-  mySerial.begin(115200);
-  pcSerial.begin(9600);
+  RBSerial.begin(115200);
+  RFSerial.begin(115200);
+  LBSerial.begin(115200);
+  LFSerial.begin(115200);
 
-  while(!mySerial){;}
-  motor1.setSerialPort(&mySerial);
+  motherBoardSerial.begin(9600);
+  
+
+  while(!RBSerial){;}
+  RBmotor.setSerialPort(&RBSerial);
+
+  /*
+  while(!RFSerial){;}
+  RFmotor.setSerialPort(&RFSerial);
+
+  while(!LBSerial){;}
+  LBmotor.setSerialPort(&LBSerial);
+  
+  while(!LFSerial){;}
+  LFmotor.setSerialPort(&LFSerial);
+*/
 }
 
 void loop() {
-
+  //drive();
   readNdrive();
+  delay(50);
 }
 
 void readNdrive(void){
   static bool receive_flag=false;
-  inc_char=pcSerial.read();
+  inc_char=motherBoardSerial.read();
   delay(20);
-  if(pcSerial.available()>0){
+  if(motherBoardSerial.available()>0){
     if(inc_char=='S'){
       rpmString="";
       receive_flag=true;
@@ -56,8 +82,7 @@ void readNdrive(void){
       
       mapData();
       
-      pcSerial.println(mapped_rpm_command_array[0]);
-      motor1.setRPM(mapped_rpm_command_array[0]);
+      
 
       receive_flag=false;
       rpmString="";
@@ -88,14 +113,17 @@ void assignRpmArray(String rpmStr){
 void mapData(void){
   for(int i=0;i<ARRAY_LEN;i++){
     if(unmapped_rpm_command_array[i]<=0){
-      mapped_rpm_command_array[i]=((unmapped_rpm_command_array[i]+255)*1000/255)-1000;
+      mapped_rpm_command_array[i]=((unmapped_rpm_command_array[i]+255)*10000/255)-10000;
     }
     if(unmapped_rpm_command_array[i]>0){
-      mapped_rpm_command_array[i]=unmapped_rpm_command_array[i]*1000/255;
+      mapped_rpm_command_array[i]=unmapped_rpm_command_array[i]*10000/255;
     }
   }
 }
 
 void drive(void){
-  
+  RBmotor.setRPM(mapped_rpm_command_array[0]);
+  //RFmotor.setRPM(mapped_rpm_command_array[1]);
+  //LBmotor.setRPM(mapped_rpm_command_array[2]);
+  //LFmotor.setRPM(mapped_rpm_command_array[3]);
 }
