@@ -2,126 +2,108 @@
 #include "HardwareSerial.h"
 #include "VescUart.h"
 #include "ros.h"
-#include "std_msgs/Int64.h"
-#include "std_msgs/Float64MultiArray.h"
+#include "std_msgs/Float64.h"
 
-#define ARRAY_LEN 1
+#define ARRAY_LEN 4
 
-std_msgs::Int64 rpm_data;
-
-static String rpmString;
-
-std_msgs::Float64MultiArray rpm_marray;
-
+char inc_char;
+String rpmString;
 int unmapped_rpm_command_array[ARRAY_LEN];
 int mapped_rpm_command_array[ARRAY_LEN];
 
-int inc_char;
-
+std_msgs::Float64 rpm_data;
 ros::NodeHandle nh;
-ros::Publisher rpm_pub("rpm_topic",&rpm_data);
+ros::Publisher rpmPub("rpm_rover_topic", &rpm_data);
 
-HardwareSerial mySerial3(PB11, PB10);
-HardwareSerial mySerial2(PC5, PC4);
+HardwareSerial RBSerial(PA3, PA2);
+HardwareSerial RFSerial(PB11, PB10);
+HardwareSerial LBSerial(PC11, PA0);
+HardwareSerial LFSerial(PD2, PC12);
+HardwareSerial motherBoardSerial(PA10, PA9);
 
-VescUart motor1;
-VescUart motor2;
-VescUart motor3;
-VescUart motor4; 
+VescUart RBmotor;
+VescUart RFmotor;
+VescUart LBmotor;
+VescUart LFmotor;
 
-void printRpm(void);
-void publishRpm(void);
 void readNdrive(void);
-void mapData(void);
 void assignRpmArray(String rpmStr);
+void mapData(void);
 void drive(void);
 
+char getDir(int x);
+int unmapRpm(void);
+void createFeedbackMsg(int a, int b, int c, int d);
+
 void setup() {
-  mySerial3.begin(115200);
-  mySerial2.begin(9600);
+  RBSerial.begin(115200);
+  RFSerial.begin(115200);
+  LBSerial.begin(115200);
+  LFSerial.begin(115200);
 
-  rpm_marray.data=(float *)malloc(sizeof(float)*ARRAY_LEN);
-  rpm_marray.data_length=ARRAY_LEN;
+  motherBoardSerial.begin(9600);
 
+  while(!RBSerial){;}
+  RBmotor.setSerialPort(&RBSerial);
   
-  while(!mySerial3) {;}
-
-  motor1.setSerialPort(&mySerial3);
-  nh.initNode();
-  nh.advertise(rpm_pub);
+  while(!RFSerial){;}
+  RFmotor.setSerialPort(&RFSerial);
   
-}
+   while(!LBSerial){;}
+  LBmotor.setSerialPort(&LBSerial);
+
+  while(!LFSerial){;}
+  LFmotor.setSerialPort(&LFSerial);
+
+  RBmotor.setRPM(0);
+  RFmotor.setRPM(0);
+  LBmotor.setRPM(0);
+  LFmotor.setRPM(0);
+  }
 
 void loop() {
+  //drive();
   readNdrive();
-}
+  
+  
+  RBmotor.setRPM(mapped_rpm_command_array[0]);
+  RFmotor.setRPM(mapped_rpm_command_array[1]);
+  LBmotor.setRPM(mapped_rpm_command_array[2]);
+  LFmotor.setRPM(mapped_rpm_command_array[3]);
+  
 
-void printRpm(void){
-  if(motor1.getVescValues()){
-    mySerial2.print("RPM 1:");
-    mySerial2.println(motor1.data.rpm);
-    /*
-    mySerial2.print("RPM 2:");
-    mySerial2.println(motor2.data.rpm);
-    mySerial2.print("RPM 3:");
-    mySerial2.println(motor3.data.rpm);
-    mySerial2.print("RPM 4:");
-    mySerial2.println(motor4.data.rpm);
-    */
-  }
-  else{
-    mySerial2.println("Failed to get the RPM data.");
-  }
-}
-
-void publishRpm(void){
-  nh.spinOnce();
-  rpm_marray.data[0]=motor1.data.rpm;
-  //rpm_marray.data[1]=motor2.data.rpm;
-  //rpm_marray.data[2]=motor3.data.rpm;
-  //rpm_marray.data[3]=motor4.data.rpm;
-
-  if(motor1.getVescValues() && motor2.getVescValues() && motor3.getVescValues() && motor4.getVescValues()){
-    rpm_data.data=motor1.data.rpm;
-    rpm_pub.publish(&rpm_data);
-  }
-  else{
-    nh.logerror("Failed to publish rpm data.");
-  }
+  delay(2);
 }
 
 void readNdrive(void){
-
-
   static bool receive_flag=false;
-  inc_char=mySerial2.read();
+  inc_char=motherBoardSerial.read();
   delay(1);
-  if(mySerial2.available()>0){
-  if(inc_char=='S'){
-    rpmString="";
-    receive_flag=true;
-  }
-  if(receive_flag && inc_char!='S' && inc_char!='F'){
-    rpmString+=(char)inc_char;
-  }
-  if(inc_char=='F'){
-    assignRpmArray(rpmString);
-    mapData();
-
-    drive();
-    receive_flag=false;
-    rpmString="";
-  }
-  }
-}
-
-void mapData(void){
-  for(int i=0;i<ARRAY_LEN;i++){
-    if(unmapped_rpm_command_array[i]<=0){
-      mapped_rpm_command_array[i]=((unmapped_rpm_command_array[i]+255)*1000/255)-1000;
+  if(motherBoardSerial.available()>0){
+    if(inc_char=='S'){
+      rpmString="";
+      receive_flag=true;
     }
-    if(unmapped_rpm_command_array[i]>0){
-      mapped_rpm_command_array[i]=unmapped_rpm_command_array[i]*1000/255;
+    if(receive_flag && inc_char!='S' && inc_char!='F'){
+      rpmString+=inc_char;
+    }
+    if(inc_char=='F'){
+      //RFSerial.println(rpmString);
+      assignRpmArray(rpmString);
+      
+      mapData();
+      //drive();
+      
+
+      
+      if(RBmotor.getVescValues() && RFmotor.getVescValues() && LBmotor.getVescValues() && LFmotor.getVescValues()){
+        //RFSerial.println(RBmotor.data.rpm);
+        createFeedbackMsg(RBmotor.data.rpm, RFmotor.data.rpm, LBmotor.data.rpm, LFmotor.data.rpm);     
+      }
+      
+
+      receive_flag=false;
+      rpmString="";
     }
   }
 }
@@ -146,10 +128,77 @@ void assignRpmArray(String rpmStr){
   }
 }
 
+void mapData(void){
+  for(int i=0;i<ARRAY_LEN;i++){
+    if(unmapped_rpm_command_array[i]<=0){
+      mapped_rpm_command_array[i]=((unmapped_rpm_command_array[i]+255)*10000/255)-10000;
+    }
+    if(unmapped_rpm_command_array[i]>0){
+      mapped_rpm_command_array[i]=unmapped_rpm_command_array[i]*10000/255;
+    }
+  }
+}
 
 void drive(void){
-  motor1.setRPM(mapped_rpm_command_array[0]);
-  //motor2.setRPM(mapped_rpm_command_array[1]);
-  //motor3.setRPM(mapped_rpm_command_array[2]);
-  //motor4.setRPM(mapped_rpm_command_array[3]);
+  RBmotor.setRPM(mapped_rpm_command_array[0]);
+  RFmotor.setRPM(mapped_rpm_command_array[1]);
+  LBmotor.setRPM(mapped_rpm_command_array[2]);
+  LFmotor.setRPM(mapped_rpm_command_array[3]);
+}
+
+char getDir(int x){
+  char direction;
+  if(x>0){
+    direction='1';
+  }
+  if(x<=0){
+    direction='0';
+  }
+  return direction;
+}
+
+int unmapRpm(int x){
+  int unmapped_data;
+  if(x>0){
+    unmapped_data=x*255/10000;
+  }
+  if(x<=0){
+    unmapped_data=((x+10000)*255/10000)-255;
+  }
+  return unmapped_data;
+}
+
+void createFeedbackMsg(int a, int b, int c, int d){
+  String sentString="A";
+  
+  sentString+=getDir(a);
+  String processedStringRB = String(abs(unmapRpm(a)));
+  while(processedStringRB.length()<3){
+    processedStringRB = "0" + processedStringRB;
+  }
+  sentString+=processedStringRB;
+  
+  sentString+=getDir(b);
+  String processedStringRF = String(abs(unmapRpm(b)));
+  while(processedStringRF.length()<3){
+    processedStringRF = "0" + processedStringRF;
+  }
+  sentString+=processedStringRF;
+
+  sentString+=getDir(c);
+  String processedStringLB = String(abs(unmapRpm(c)));
+  while(processedStringLB.length()<3){
+    processedStringLB = "0" + processedStringLB;
+  }
+  sentString+=processedStringLB;
+  
+  sentString+=getDir(d);
+  String processedStringLF = String(abs(unmapRpm(a)));
+  while(processedStringLF.length()<3){
+    processedStringLF = "0" + processedStringLF;
+  }
+  sentString+=processedStringLF;
+  
+  sentString+="B";
+  motherBoardSerial.println(sentString);
 }
